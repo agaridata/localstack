@@ -13,7 +13,7 @@ except ImportError:
     # for Python 2.7
     from pipes import quote as cmd_quote
 from localstack import config
-from localstack.utils.common import run, TMP_FILES, short_uid, save_file, to_str, cp_r
+from localstack.utils.common import run, TMP_FILES, short_uid, save_file, cp_r
 from localstack.services.install import INSTALL_PATH_LOCALSTACK_FAT_JAR
 
 # constants
