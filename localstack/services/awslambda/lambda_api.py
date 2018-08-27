@@ -378,11 +378,11 @@ def get_java_handler(zip_file_content, handler, main_file):
     """
     if is_zip_archive(zip_file_content):
         def execute(event, context):
-            # TODO: Extract archive
             with zipfile.ZipFile(LAMBDA_ZIP_FILE_NAME, 'r') as zf:
                 zf.extractall('.')
             result, log_output = lambda_executors.EXECUTOR_LOCAL.execute_java_lambda(
-                event, context, handler=handler, main_file=main_file, classpath='.:lib/*:%s'%INSTALL_PATH_LOCALSTACK_FAT_JAR)
+                event, context, handler=handler, main_file=main_file,
+                classpath='.:lib/*:%s' % INSTALL_PATH_LOCALSTACK_FAT_JAR)
             return result
         return execute
     elif is_jar_archive(zip_file_content):
@@ -396,6 +396,7 @@ def get_java_handler(zip_file_content, handler, main_file):
 
 
 def is_zip_archive(content):
+    # TODO: Perhaps there's a better way rather than looking for files in 'lib/'
     try:
         with tempfile.NamedTemporaryFile() as tf:
             tf.write(content)
@@ -548,7 +549,6 @@ def create_function():
         func_details.runtime = data['Runtime']
         # Copy appears to be necessary for it to appear in the execution
         func_details.envvars = data.get('Environment', {}).get('Variables', {}).copy()
-        LOG.info("func_details.envvars on create: %s" % func_details.envvars)
         func_details.timeout = data.get('Timeout')
         result = set_function_code(data['Code'], lambda_name)
         if isinstance(result, Response):
@@ -716,9 +716,7 @@ def update_function_configuration(function):
     if data.get('Runtime'):
         lambda_details.runtime = data['Runtime']
     if data.get('Environment'):
-        LOG.info("envvars update before: %s" % lambda_details.envvars)
         lambda_details.envvars = data.get('Environment', {}).get('Variables', {}).copy()
-        LOG.info("envvars update after: %s" % lambda_details.envvars)
     if data.get('Timeout'):
         lambda_details.timeout = data['Timeout']
     result = {}

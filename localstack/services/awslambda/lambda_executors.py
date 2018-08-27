@@ -55,9 +55,20 @@ class LambdaExecutor(object):
         pass
 
     def run_lambda_executor(self, cmd, env_vars={}, asynchronous=False):
-        result = run(cmd, asynchronous=False, stderr=subprocess.STDOUT, env_vars=env_vars)
-        LOG.info("Result: %s" % result)
-        return 'null', ''
+        process = run(cmd, asynchronous=True, stderr=subprocess.PIPE, outfile=subprocess.PIPE, env_vars=env_vars)
+        if asynchronous:
+            result = '{"asynchronous": "%s"}' % asynchronous
+            log_output = 'Lambda executed asynchronously'
+        else:
+            # This was using process.wait() but if the process LambdaExecutor wraps logs to stdout a lot then the OS
+            # can permanently block. See: https://docs.python.org/2/library/subprocess.html#subprocess.Popen.wait
+            try:
+                result, log_output = process.communicate()
+            except Exception, e:
+                LOG.error('Lambda process returned error status code. Result:\n%s\nOutput:\n%s' %
+                          (result, log_output))
+                raise e
+        return result, log_output
 
 
 # holds information about an existing container.
@@ -437,7 +448,6 @@ class LambdaExecutorLocal(LambdaExecutor):
     def execute(self, func_arn, func_details, event, context=None, version=None, asynchronous=False):
         lambda_cwd = func_details.cwd
         environment = func_details.envvars.copy()
-        LOG.info("func_details.envvars: %s" % func_details.envvars)
 
         # execute the Lambda function in a forked sub-process, sync result via queue
         queue = Queue()
@@ -452,9 +462,9 @@ class LambdaExecutorLocal(LambdaExecutor):
                 # TODO: Another bug; this will add to the environment but never reset after
                 # Fix by storing old environ and reverting after run regardless of outcome
                 os.environ.update(environment)
-            LOG.info("cwd: %s" % lambda_cwd)
-            LOG.info("cwd content: %s" % os.listdir('.'))
-            LOG.info("environment: %s" % os.environ)
+            LOG.debug('cwd: %s' % lambda_cwd)
+            LOG.debug('cwd content: %s' % os.listdir('.'))
+            LOG.debug('environment: %s' % os.environ)
             result = lambda_function(event, context)
             queue.put(result)
 
@@ -473,7 +483,7 @@ class LambdaExecutorLocal(LambdaExecutor):
         if classpath is None:
             classpath = '%s:%s' % (LAMBDA_EXECUTOR_JAR, main_file)
         cmd = 'java -cp %s %s %s %s' % (classpath, LAMBDA_EXECUTOR_CLASS, class_name, event_file)
-        LOG.info("Lambda cmd: %s" % cmd)
+        LOG.debug('Lambda cmd: %s' % cmd)
         asynchronous = False
         # flip asynchronous flag depending on origin
         if 'Records' in event:
@@ -483,7 +493,7 @@ class LambdaExecutorLocal(LambdaExecutor):
             if 'dynamodb' in event['Records'][0]:
                 asynchronous = True
         result, log_output = self.run_lambda_executor(cmd, asynchronous=asynchronous)
-        LOG.info('Lambda result / log output:\n%s\n> %s' % (result.strip(), log_output.strip().replace('\n', '\n> ')))
+        LOG.debug('Lambda result / log output:\n%s\n> %s' % (result.strip(), log_output.strip().replace('\n', '\n> ')))
         return result, log_output
 
 

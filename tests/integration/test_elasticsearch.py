@@ -1,7 +1,6 @@
 import json
 import time
-from botocore.exceptions import ClientError
-from nose.tools import assert_raises, assert_equal, assert_true, assert_false
+from nose.tools import assert_equal, assert_true
 from localstack.utils.aws import aws_stack
 from localstack.utils.common import safe_requests as requests
 
@@ -50,36 +49,6 @@ def delete_document(id):
     # Pause to allow the document to be indexed
     time.sleep(1)
     return resp
-
-
-def test_domain_creation():
-    es_client = aws_stack.connect_to_service('es')
-
-    # create ES domain
-    es_client.create_elasticsearch_domain(DomainName=TEST_DOMAIN_NAME)
-    assert_true(TEST_DOMAIN_NAME in
-        [d['DomainName'] for d in es_client.list_domain_names()['DomainNames']])
-
-    # make sure we cannot re-create same domain name
-    assert_raises(ClientError, es_client.create_elasticsearch_domain, DomainName=TEST_DOMAIN_NAME)
-
-    # get domain status
-    status = es_client.describe_elasticsearch_domain(DomainName=TEST_DOMAIN_NAME)
-    assert_equal(status['DomainStatus']['DomainName'], TEST_DOMAIN_NAME)
-    assert_true(status['DomainStatus']['Created'])
-    assert_false(status['DomainStatus']['Processing'])
-    assert_false(status['DomainStatus']['Deleted'])
-    assert_equal(status['DomainStatus']['Endpoint'], aws_stack.get_elasticsearch_endpoint())
-    assert_true(status['DomainStatus']['EBSOptions']['EBSEnabled'])
-
-    # make sure we can fake adding tags to a domain
-    response = es_client.add_tags(ARN='string', TagList=[{'Key': 'SOME_TAG', 'Value': 'SOME_VALUE'}])
-    assert_equal(200, response['ResponseMetadata']['HTTPStatusCode'])
-
-    # make sure domain deletion works
-    es_client.delete_elasticsearch_domain(DomainName=TEST_DOMAIN_NAME)
-    assert_false(TEST_DOMAIN_NAME in
-        [d['DomainName'] for d in es_client.list_domain_names()['DomainNames']])
 
 
 def test_elasticsearch_get_document():
