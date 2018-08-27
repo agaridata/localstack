@@ -16,6 +16,10 @@ ADD localstack/ext/ localstack/ext/
 # install dependencies
 RUN make install
 
+# build the java code and copy it to the dest
+RUN cd localstack/ext/java; mvn -Pfatjar -DskipTests -q clean package
+RUN cp localstack/ext/java/target/localstack-utils-*-fat.jar localstack/infra/localstack-utils-fat.jar
+
 # add files required to run "make init"
 ADD localstack/package.json localstack/package.json
 ADD localstack/services/__init__.py localstack/services/install.py localstack/services/
