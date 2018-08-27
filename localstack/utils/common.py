@@ -516,6 +516,7 @@ def _unzip_file_entry(zip_ref, file_entry, target_dir):
 
 def is_jar_archive(content):
     has_class_content = False
+    # This is abhorent; it's looking at binary data for the string 'class' and if it's there it has class content
     try:
         has_class_content = 'class' in content
     except TypeError:

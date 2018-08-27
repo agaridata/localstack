@@ -4,6 +4,7 @@ import os
 import sys
 import json
 import uuid
+import tempfile
 import time
 import traceback
 import logging
@@ -11,6 +12,7 @@ import base64
 import threading
 import imp
 import re
+import zipfile
 from io import BytesIO
 from datetime import datetime
 from six import iteritems
@@ -28,6 +30,7 @@ from localstack.services.awslambda.lambda_executors import (
     LAMBDA_RUNTIME_JAVA8,
     LAMBDA_RUNTIME_DOTNETCORE2,
     LAMBDA_RUNTIME_GOLANG)
+from localstack.services.install import INSTALL_PATH_LOCALSTACK_FAT_JAR
 from localstack.utils.common import (to_str, load_file, save_file, TMP_FILES, ensure_readable,
     mkdir, unzip, is_zip_file, run, short_uid, is_jar_archive, timestamp, TIMESTAMP_FORMAT_MILLIS)
 from localstack.utils.aws import aws_stack, aws_responses
@@ -373,7 +376,16 @@ def get_java_handler(zip_file_content, handler, main_file):
 
     :returns: function or flask.Response
     """
-    if is_jar_archive(zip_file_content):
+    if is_zip_archive(zip_file_content):
+        def execute(event, context):
+            # TODO: Extract archive
+            with zipfile.ZipFile(LAMBDA_ZIP_FILE_NAME, 'r') as zf:
+                zf.extractall('.')
+            result, log_output = lambda_executors.EXECUTOR_LOCAL.execute_java_lambda(
+                event, context, handler=handler, main_file=main_file, classpath='.:lib/*:%s'%INSTALL_PATH_LOCALSTACK_FAT_JAR)
+            return result
+        return execute
+    elif is_jar_archive(zip_file_content):
         def execute(event, context):
             result, log_output = lambda_executors.EXECUTOR_LOCAL.execute_java_lambda(
                 event, context, handler=handler, main_file=main_file)
@@ -381,6 +393,19 @@ def get_java_handler(zip_file_content, handler, main_file):
         return execute
     return error_response(
         'ZIP file for the java8 runtime not yet supported.', 400, error_type='ValidationError')
+
+
+def is_zip_archive(content):
+    try:
+        with tempfile.NamedTemporaryFile() as tf:
+            tf.write(content)
+            tf.flush()
+            with zipfile.ZipFile(tf.name, 'r') as zf:
+                if 'lib/' in [x.filename for x in zf.infolist()]:
+                    return True
+    except Exception:
+        pass
+    return False
 
 
 def set_function_code(code, lambda_name):
@@ -521,7 +546,9 @@ def create_function():
         func_details.versions = {'$LATEST': {'CodeSize': 50}}
         func_details.handler = data['Handler']
         func_details.runtime = data['Runtime']
-        func_details.envvars = data.get('Environment', {}).get('Variables', {})
+        # Copy appears to be necessary for it to appear in the execution
+        func_details.envvars = data.get('Environment', {}).get('Variables', {}).copy()
+        LOG.info("func_details.envvars on create: %s" % func_details.envvars)
         func_details.timeout = data.get('Timeout')
         result = set_function_code(data['Code'], lambda_name)
         if isinstance(result, Response):
@@ -689,7 +716,9 @@ def update_function_configuration(function):
     if data.get('Runtime'):
         lambda_details.runtime = data['Runtime']
     if data.get('Environment'):
-        lambda_details.envvars = data.get('Environment', {}).get('Variables', {})
+        LOG.info("envvars update before: %s" % lambda_details.envvars)
+        lambda_details.envvars = data.get('Environment', {}).get('Variables', {}).copy()
+        LOG.info("envvars update after: %s" % lambda_details.envvars)
     if data.get('Timeout'):
         lambda_details.timeout = data['Timeout']
     result = {}

@@ -56,7 +56,8 @@ public class LambdaExecutor {
 				inputObject = deserialisedInput.get();
 			}
 		} else {
-			if (records.stream().anyMatch(record -> record.containsKey("Kinesis"))) {
+			if (records.stream().anyMatch(record -> record.containsKey("Kinesis")) ||
+			    records.stream().anyMatch(record -> record.containsKey("kinesis"))) {
 				KinesisEvent kinesisEvent = new KinesisEvent();
 				inputObject = kinesisEvent;
 				kinesisEvent.setRecords(new LinkedList<>());
@@ -112,6 +113,7 @@ public class LambdaExecutor {
 				new StringInputStream(fileContent), os, ctx);
 			System.out.println(os);
 		}
+		System.exit(0);
 	}
 
 	private static Optional<Object> getInputObject(ObjectMapper mapper, String objectString, Object handler) {
